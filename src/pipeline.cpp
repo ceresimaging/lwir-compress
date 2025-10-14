@@ -171,9 +171,12 @@ bool CompressionPipeline::run()
     struct dirent* entry;
     while ((entry = readdir(dir)) != nullptr) {
         std::string filename = entry->d_name;
-        // Check if filename ends with .png
+        // Check if filename ends with .png and starts with "jenoptik_"
         if (filename.length() > 4 && filename.substr(filename.length() - 4) == ".png") {
-            input_files.push_back(config_.input_dir + "/" + filename);
+            // Filter for jenoptik frames only (skip analysis/mask files)
+            if (filename.find("jenoptik_") == 0) {
+                input_files.push_back(config_.input_dir + "/" + filename);
+            }
         }
     }
     closedir(dir);

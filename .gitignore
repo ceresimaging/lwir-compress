@@ -1,0 +1,10 @@
+build/
+*.o
+*.a
+*.so
+*.dylib
+*.exe
+compile_commands.json
+.vscode/
+.idea/
+cmake-build-*/

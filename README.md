@@ -90,6 +90,64 @@ Then link against `liblwir_compress.a` in your build system.
 
 The library exploits temporal redundancy in thermal video (typically 99%+ overlap between frames):
 
+```mermaid
+graph LR
+    A[Raw Frame 0<br/>Keyframe] --> B[JPEG-LS<br/>Encode]
+    B --> C[Compressed<br/>Keyframe]
+
+    D[Raw Frame 1] --> E[Compute<br/>Residual]
+    F[Reconstructed<br/>Frame 0] --> E
+    E --> G[Quantize]
+    G --> H[JPEG-LS<br/>Encode]
+    H --> I[Compressed<br/>Residual 1]
+
+    I --> J[Decode +<br/>Reconstruct]
+    J --> K[Reconstructed<br/>Frame 1]
+
+    L[Raw Frame 2] --> M[Compute<br/>Residual]
+    K --> M
+    M --> N[Quantize]
+    N --> O[JPEG-LS<br/>Encode]
+    O --> P[Compressed<br/>Residual 2]
+
+    style A fill:#e1f5ff
+    style D fill:#e1f5ff
+    style L fill:#e1f5ff
+    style C fill:#ffe1e1
+    style I fill:#ffe1e1
+    style P fill:#ffe1e1
+```
+
+#### GOP Structure
+
+```mermaid
+graph TD
+    subgraph "GOP 1 (60 frames)"
+        K1[Frame 0<br/>KEYFRAME<br/>750 KB]
+        R1[Frame 1<br/>RESIDUAL<br/>325 KB]
+        R2[Frame 2<br/>RESIDUAL<br/>325 KB]
+        dots1[...]
+        R59[Frame 59<br/>RESIDUAL<br/>325 KB]
+    end
+
+    subgraph "GOP 2 (60 frames)"
+        K2[Frame 60<br/>KEYFRAME<br/>750 KB]
+        R60[Frame 61<br/>RESIDUAL<br/>325 KB]
+        dots2[...]
+    end
+
+    K1 --> R1 --> R2 --> dots1 --> R59 --> K2 --> R60 --> dots2
+
+    style K1 fill:#ffd700
+    style K2 fill:#ffd700
+    style R1 fill:#90ee90
+    style R2 fill:#90ee90
+    style R59 fill:#90ee90
+    style R60 fill:#90ee90
+```
+
+#### Encoding Pipeline
+
 1. **GOP Structure**: Frames are organized into Groups of Pictures (GOP)
    - First frame: Keyframe (full frame encoded with JPEG-LS)
    - Subsequent frames: Residual frames (difference from reconstructed previous frame)
@@ -109,7 +167,51 @@ The library exploits temporal redundancy in thermal video (typically 99%+ overla
    - Near-lossless mode: Small errors allowed for better compression
    - Residuals compress extremely well (mostly zeros)
 
+#### Quantization
+
+```mermaid
+graph TD
+    A[Residual Value] --> B{|value| < t?}
+    B -->|Yes| C[Quantized = 0<br/>Dead Zone]
+    B -->|No| D[Quantized = round(value / q)<br/>Fractional Step]
+
+    C --> E[JPEG-LS Encode]
+    D --> E
+
+    E --> F[Compressed Residual]
+
+    style C fill:#90ee90
+    style D fill:#ffeb99
+    style F fill:#ffe1e1
+```
+
+**Example with t=2, q=2.0:**
+- Input residual: `[-5, -2, -1, 0, 1, 2, 3, 5, 10]`
+- After dead zone: `[-5, 0, 0, 0, 0, 0, 3, 5, 10]`
+- After quantization: `[-2, 0, 0, 0, 0, 0, 2, 2, 5]`
+- Result: 67% zeros → excellent compression
+
 ### Why This Works for Thermal
+
+```mermaid
+graph TD
+    A[Thermal Video Properties] --> B[High Temporal<br/>Correlation<br/>99%+ overlap]
+    A --> C[Smooth Spatial<br/>Gradients<br/>Low frequency]
+    A --> D[Low Noise Floor<br/>~10 DN]
+
+    B --> E[Residuals Mostly<br/>Small Values]
+    C --> E
+
+    E --> F[Dead Zone<br/>Quantization]
+    D --> F
+
+    F --> G[67% Zeros in<br/>Residuals]
+
+    G --> H[5× Compression<br/>with JPEG-LS]
+
+    style A fill:#e1f5ff
+    style H fill:#90ee90
+```
 
 - **High temporal correlation**: Aircraft motion is slow relative to frame rate
 - **Smooth spatial gradients**: Thermal scenes have less high-frequency content
